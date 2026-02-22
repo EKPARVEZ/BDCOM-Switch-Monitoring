@@ -2,7 +2,7 @@
 // ১. ডাটাবেস কনফিগারেশন
 define('DB_HOST', 'localhost');
 define('DB_USER', 'root');
-define('DB_PASS', 'Parvez@9810#'); // আপনার ডাটাবেস পাসওয়ার্ড দিন
+define('DB_PASS', ''); // আপনার ডাটাবেস পাসওয়ার্ড দিন
 define('DB_NAME', 'switch_monitor');
 
 // ২. ডাটাবেস কানেকশন তৈরি
@@ -27,4 +27,5 @@ date_default_timezone_set('Asia/Dhaka');
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
+
 ?>
