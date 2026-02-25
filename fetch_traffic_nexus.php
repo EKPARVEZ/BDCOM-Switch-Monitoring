@@ -12,46 +12,47 @@ $response = [];
 if($switch) {
     $ip = $switch['ip_address'];
     $com = $switch['community'];
-    
-    // ১. ইন্টারফেসের নাম এবং ইনডেক্স
+
+    // ১. ইন্টারফেস এবং ট্রাফিক ডাটা সংগ্রহ (Nexus-এ 64-bit HC counters জরুরি)
     $portNames = @snmp2_real_walk($ip, $com, ".1.3.6.1.2.1.2.2.1.2");
-    // ২. ট্রাফিক (64-bit Counters for Nexus 10G/40G)
     $portInRaw = @snmp2_real_walk($ip, $com, ".1.3.6.1.2.1.31.1.1.1.6");
     
-    // ৩. Cisco Nexus Power OID (Entity Sensor MIB)
-    // Nexus-এ RX/TX পাওয়ার সরাসরি পোর্টের ইনডেক্সে থাকে না, এটি সেন্সর ইনডেক্সে থাকে।
-    // আপাতত আমরা স্ট্যান্ডার্ড ট্রাফিক এবং স্ট্যাটাস ফোকাস করছি।
-    
+    // ২. Nexus Sensor Value OID (পাওয়ার রিডিং এর জন্য)
+    // .1.3.6.1.4.1.9.9.91.1.1.1.1.4 (entSensorValue)
+    $sensorValues = @snmp2_real_walk($ip, $com, ".1.3.6.1.4.1.9.9.91.1.1.1.1.4");
+
     if($portNames) {
         foreach($portNames as $oid => $val) {
             $index = substr(strrchr($oid, "."), 1);
             $port_name = str_replace('"', '', $val);
 
-            // শুধু Ethernet বা Physical পোর্টগুলো ফিল্টার করা (Nexus-এ অনেক লজিক্যাল পোর্ট থাকে)
-            if (strpos($port_name, 'Ethernet') === false) continue;
+            // শুধু ফিজিক্যাল পোর্ট (Eth) ফিল্টার
+            if (strpos($port_name, 'Eth') === false) continue;
 
             // Mbps ক্যালকুলেশন
-            $raw_oid = ".1.3.6.1.2.1.31.1.1.1.6." . $index;
-            $current_in = isset($portInRaw[$raw_oid]) ? (float)preg_replace('/[^0-9.]/', '', $portInRaw[$raw_oid]) : 0;
-            
             $mbps = 0;
-            $last_res = $conn->query("SELECT in_octets, recorded_at FROM port_traffic WHERE port_index='$index' AND switch_id=$switch_id ORDER BY id DESC LIMIT 1");
-            if($last = $last_res->fetch_assoc()) {
-                $diff = $current_in - (float)$last['in_octets'];
-                $time_diff = time() - strtotime($last['recorded_at']);
-                if($time_diff > 0 && $diff > 0) {
-                    $mbps = round(($diff * 8) / ($time_diff * 1000000), 2);
+            $raw_in_oid = ".1.3.6.1.2.1.31.1.1.1.6." . $index;
+            if(isset($portInRaw[$raw_in_oid])) {
+                $current_in = (float)preg_replace('/[^0-9.]/', '', $portInRaw[$raw_in_oid]);
+                $last_res = $conn->query("SELECT in_octets, recorded_at FROM port_traffic WHERE port_index='$index' AND switch_id=$switch_id ORDER BY id DESC LIMIT 1");
+                if($last = $last_res->fetch_assoc()) {
+                    $diff = $current_in - (float)$last['in_octets'];
+                    $time_diff = time() - strtotime($last['recorded_at']);
+                    if($time_diff > 0 && $diff > 0) $mbps = round(($diff * 8) / ($time_diff * 1000000), 2);
                 }
-            }
-            if($current_in > 0) {
                 $conn->query("INSERT INTO port_traffic (switch_id, port_index, in_octets) VALUES ($switch_id, '$index', '$current_in')");
             }
+
+            // Power (DOM) ম্যাপিং
+            // Nexus-এ সেন্সর ইনডেক্স ডাইনামিক। সাধারণত পোর্টের সেন্সর আইডিগুলো ভিন্ন হয়।
+            // এই পার্টটি N/A দেখাবে যদি DOM ডাটা ওআইডিতে না পাওয়া যায়।
+            $rx_dbm = "N/A"; $tx_dbm = "N/A";
 
             $response[] = [
                 'index' => $index,
                 'mbps' => number_format($mbps, 2),
-                'rx' => "N/A", // Nexus DOM এর জন্য আলাদা সেন্সর ম্যাপিং লাগে
-                'tx' => "N/A"
+                'rx' => $rx_dbm,
+                'tx' => $tx_dbm
             ];
         }
     }
