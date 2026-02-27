@@ -2,8 +2,8 @@
 require_once 'config.php';
 
 // টেলিগ্রাম সেটিংস
-$botToken = "8765180306:AAHIMDwC84NaNjOHhvTK4dJRK65Y2N_cP8M";
-$chatId = "1913663623";
+$botToken = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
+$chatId = "xxxxxxxxxxxxxxxxxx";
 
 function sendTelegram($msg, $token, $id) {
     $url = "https://api.telegram.org/bot$token/sendMessage?chat_id=$id&text=" . urlencode($msg) . "&parse_mode=HTML";
@@ -62,4 +62,5 @@ while($sw = $switches->fetch_assoc()) {
         }
     }
 }
+
 echo "Check Completed at " . date('H:i:s');
